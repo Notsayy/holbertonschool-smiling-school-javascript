@@ -1,7 +1,15 @@
 $(document).ready(function () {
-  loadQuotes();
-  loadPopularTutorials();
-  loadLatestVideos();
+  if (window.location.pathname.includes("courses")) {
+    loadCourses();
+  } else {
+    loadQuotes();
+    if ($("#carouselExampleControls2").length) {
+      loadPopularTutorials();
+    }
+    if ($("#carouselExampleControls3").length) {
+      loadLatestVideos();
+    }
+  }
 });
 
 function loadQuotes() {
@@ -18,11 +26,11 @@ function loadQuotes() {
         const activeClass = index === 0 ? "active" : "";
         carouselItems += `
           <div class="carousel-item ${activeClass}">
-            <div class="row mx-auto align-items-center justify-content-center">
-              <div class="col-12 col-sm-2 col-lg-2 text-center">
+            <div class="row mx-auto align-items-center">
+              <div class="col-12 col-sm-2 col-lg-2 offset-lg-1 text-center">
                 <img src="${quote.pic_url}" class="d-block align-self-center" alt="${quote.name}" />
               </div>
-              <div class="col-12 col-sm-7 col-lg-7">
+              <div class="col-12 col-sm-7 offset-sm-2 col-lg-9 offset-lg-0">
                 <div class="quote-text">
                   <p class="text-white">« ${quote.text}</p>
                   <h4 class="text-white font-weight-bold">${quote.name}</h4>
@@ -45,14 +53,23 @@ function loadQuotes() {
   });
 }
 
+function getVisibleCards() {
+  const width = $(window).width();
+  if (width < 576) return 1;
+  if (width < 992) return 2;
+  return 4;
+}
+
 function createSlidingCarousel(carouselId, videos) {
   const $carousel = $(carouselId);
   const $inner = $carousel.find(".carousel-inner");
   let currentIndex = 0;
+
   const videosLoop = [...videos, ...videos, ...videos];
   const startIndex = videos.length;
+
   let allCardsHTML =
-    '<div class="carousel-item active"><div class="row flex-nowrap" style="transition: transform 0.6s ease;">';
+    '<div class="carousel-item active"><div class="row flex-nowrap" style="transition: transform 0.6s ease; margin: 0;">';
 
   videosLoop.forEach(function (video) {
     let starsHtml = "";
@@ -62,8 +79,8 @@ function createSlidingCarousel(carouselId, videos) {
     }
 
     allCardsHTML += `
-      <div class="col-12 col-sm-6 col-lg-3" style="flex: 0 0 auto;">
-        <div class="card mx-2">
+      <div class="video-card-wrapper" style="width: 100%; flex-shrink: 0; padding: 0 10px;">
+        <div class="card">
           <img src="${video.thumb_url}" class="card-img-top" alt="${video.title}" />
           <div class="card-img-overlay text-center">
             <img src="images/play.png" alt="Play" width="64px" class="align-self-center play-overlay" />
@@ -90,10 +107,20 @@ function createSlidingCarousel(carouselId, videos) {
 
   const $row = $inner.find(".row");
   currentIndex = startIndex;
+
+  function updateCardWidths() {
+    const visibleCards = getVisibleCards();
+    const cardWidth = 100 / visibleCards;
+    $row.find(".video-card-wrapper").css("width", cardWidth + "%");
+  }
+
+  updateCardWidths();
   $carousel.carousel("dispose");
+
   function updateCarouselPosition(animate = true) {
-    const cardWidth = $row.find(".col-12").first().outerWidth(true);
-    const translateX = -(currentIndex * cardWidth);
+    const visibleCards = getVisibleCards();
+    const cardPercentage = 100 / visibleCards;
+    const translateX = -(currentIndex * cardPercentage);
 
     if (animate) {
       $row.css("transition", "transform 0.6s ease");
@@ -101,11 +128,13 @@ function createSlidingCarousel(carouselId, videos) {
       $row.css("transition", "none");
     }
 
-    $row.css("transform", `translateX(${translateX}px)`);
+    $row.css("transform", `translateX(${translateX}%)`);
   }
+
   setTimeout(function () {
     updateCarouselPosition(false);
   }, 100);
+
   $carousel
     .find(".carousel-control-next")
     .off("click")
@@ -113,6 +142,7 @@ function createSlidingCarousel(carouselId, videos) {
       e.preventDefault();
       currentIndex++;
       updateCarouselPosition(true);
+
       if (currentIndex >= videos.length * 2) {
         setTimeout(function () {
           currentIndex = videos.length;
@@ -120,6 +150,7 @@ function createSlidingCarousel(carouselId, videos) {
         }, 600);
       }
     });
+
   $carousel
     .find(".carousel-control-prev")
     .off("click")
@@ -127,6 +158,7 @@ function createSlidingCarousel(carouselId, videos) {
       e.preventDefault();
       currentIndex--;
       updateCarouselPosition(true);
+
       if (currentIndex < videos.length) {
         setTimeout(function () {
           currentIndex = videos.length * 2 - 1;
@@ -134,8 +166,16 @@ function createSlidingCarousel(carouselId, videos) {
         }, 600);
       }
     });
-}
 
+  let resizeTimer;
+  $(window).on("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      updateCardWidths();
+      updateCarouselPosition(false);
+    }, 250);
+  });
+}
 function loadPopularTutorials() {
   $("#popular-loader").show();
   $("#carouselExampleControls2").hide();
@@ -174,3 +214,150 @@ function loadLatestVideos() {
     },
   });
 }
+let currentTopic = "";
+let currentSort = "most_popular";
+let searchTimeout;
+
+function loadCourses() {
+  const searchValue = $("#search-input").val();
+
+  $("#courses-loader").show();
+  $("#results-container").hide();
+
+  $.ajax({
+    url: "https://smileschool-api.hbtn.info/courses",
+    method: "GET",
+    data: {
+      q: searchValue,
+      topic: currentTopic,
+      sort: currentSort,
+    },
+    dataType: "json",
+    success: function (data) {
+      if ($("#topic-menu").children().length === 0) {
+        populateTopics(data.topics);
+      }
+      if ($("#sort-menu").children().length === 0) {
+        populateSorts(data.sorts);
+      }
+
+      if (data.q && $("#search-input").val() === "") {
+        $("#search-input").val(data.q);
+      }
+
+      displayCourses(data.courses);
+
+      const videoCount = data.courses.length;
+      $("#video-count").text(
+        videoCount + (videoCount === 1 ? " video" : " videos"),
+      );
+
+      $("#courses-loader").hide();
+      $("#results-container").show();
+    },
+    error: function (error) {
+      console.error("Erreur lors du chargement des cours:", error);
+      $("#courses-loader").hide();
+    },
+  });
+}
+
+function populateTopics(topics) {
+  let topicsHtml = "";
+
+  topics.forEach(function (topic) {
+    const topicValue = topic.toLowerCase() === "all" ? "" : topic;
+    topicsHtml += `<a class="dropdown-item" href="#" data-topic="${topicValue}">${topic}</a>`;
+  });
+
+  $("#topic-menu").html(topicsHtml);
+
+  $("#topic-menu .dropdown-item").on("click", function (e) {
+    e.preventDefault();
+    currentTopic = $(this).data("topic");
+    $("#topic-selected").text($(this).text());
+    loadCourses();
+  });
+}
+
+function populateSorts(sorts) {
+  let sortsHtml = "";
+
+  sorts.forEach(function (sort) {
+    const sortName = sort
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+
+    sortsHtml += `<a class="dropdown-item" href="#" data-sort="${sort}">${sortName}</a>`;
+  });
+
+  $("#sort-menu").html(sortsHtml);
+
+  $("#sort-menu .dropdown-item").on("click", function (e) {
+    e.preventDefault();
+    currentSort = $(this).data("sort");
+    $("#sort-selected").text($(this).text());
+    loadCourses();
+  });
+}
+
+function displayCourses(courses) {
+  let coursesHtml = "";
+
+  courses.forEach(function (course) {
+    let starsHtml = "";
+    for (let i = 1; i <= 5; i++) {
+      const starImage = i <= course.star ? "star_on.png" : "star_off.png";
+      starsHtml += `<img src="images/${starImage}" alt="star" width="15px" />`;
+    }
+
+    coursesHtml += `
+      <div class="col-12 col-sm-4 col-lg-3 d-flex justify-content-center">
+        <div class="card">
+          <img
+            src="${course.thumb_url}"
+            class="card-img-top"
+            alt="Video thumbnail"
+          />
+          <div class="card-img-overlay text-center">
+            <img
+              src="images/play.png"
+              alt="Play"
+              width="64px"
+              class="align-self-center play-overlay"
+            />
+          </div>
+          <div class="card-body">
+            <h5 class="card-title font-weight-bold">${course.title}</h5>
+            <p class="card-text text-muted">${course["sub-title"]}</p>
+            <div class="creator d-flex align-items-center">
+              <img
+                src="${course.author_pic_url}"
+                alt="${course.author}"
+                width="30px"
+                class="rounded-circle"
+              />
+              <h6 class="pl-3 m-0 main-color">${course.author}</h6>
+            </div>
+            <div class="info pt-3 d-flex justify-content-between">
+              <div class="rating">
+                ${starsHtml}
+              </div>
+              <span class="main-color">${course.duration}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  $("#courses-grid").html(coursesHtml);
+}
+
+$("#search-input").on("input", function () {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(function () {
+    loadCourses();
+  }, 500);
+});
