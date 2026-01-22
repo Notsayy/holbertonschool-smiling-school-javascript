@@ -1,6 +1,7 @@
 $(document).ready(function () {
   loadQuotes();
   loadPopularTutorials();
+  loadLatestVideos();
 });
 
 function loadQuotes() {
@@ -102,11 +103,9 @@ function createSlidingCarousel(carouselId, videos) {
 
     $row.css("transform", `translateX(${translateX}px)`);
   }
-
   setTimeout(function () {
     updateCarouselPosition(false);
   }, 100);
-
   $carousel
     .find(".carousel-control-next")
     .off("click")
@@ -114,7 +113,6 @@ function createSlidingCarousel(carouselId, videos) {
       e.preventDefault();
       currentIndex++;
       updateCarouselPosition(true);
-
       if (currentIndex >= videos.length * 2) {
         setTimeout(function () {
           currentIndex = videos.length;
@@ -122,7 +120,6 @@ function createSlidingCarousel(carouselId, videos) {
         }, 600);
       }
     });
-
   $carousel
     .find(".carousel-control-prev")
     .off("click")
@@ -130,7 +127,6 @@ function createSlidingCarousel(carouselId, videos) {
       e.preventDefault();
       currentIndex--;
       updateCarouselPosition(true);
-
       if (currentIndex < videos.length) {
         setTimeout(function () {
           currentIndex = videos.length * 2 - 1;
@@ -156,6 +152,25 @@ function loadPopularTutorials() {
     error: function (error) {
       console.error("Erreur popular tutorials:", error);
       $("#popular-loader").hide();
+    },
+  });
+}
+function loadLatestVideos() {
+  $("#latest-loader").show();
+  $("#carouselExampleControls3").hide();
+
+  $.ajax({
+    url: "https://smileschool-api.hbtn.info/latest-videos",
+    method: "GET",
+    dataType: "json",
+    success: function (data) {
+      createSlidingCarousel("#carouselExampleControls3", data);
+      $("#latest-loader").hide();
+      $("#carouselExampleControls3").show();
+    },
+    error: function (error) {
+      console.error("Erreur latest videos:", error);
+      $("#latest-loader").hide();
     },
   });
 }
